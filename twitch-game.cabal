@@ -16,7 +16,9 @@ tested-With: GHC == 8.6.5
 
 executable twitch-game
   main-is:             Main.hs
-  -- other-modules:
+  other-modules: Types
+               , Bot
+               , JSON.Internals
   -- other-extensions:
   ghc-options: -Wall
                -O3
@@ -25,9 +27,17 @@ executable twitch-game
                -with-rtsopts=-N
   build-depends:       base ^>=4.12.0.0
                      , aeson
+                     , async
+                     , containers
+                     , lens ^>=4.17.1
+                     , mtl
+                     , parsec
+                     , random
                      , servant
                      , servant-server
+                     , stm
                      , text
+                     , uuid-types
                      , warp
                      , wai
                      , wai-extra

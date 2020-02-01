@@ -1,21 +1,38 @@
 # twitch-game
 
-# TODO
-
-- [ ] Inbound port 8080 is not open by default on physical.nix
-- [ ] Requires a much bigger instance due to the compilation of the derivation.
-
-The server should be running on `8080`.
-
-```
-curl -X GET ec2-3-248-202-110.eu-west-1.compute.amazonaws.com:8080/hello -H "Content-Type: application/json"
-```
-
 Don't forget to add the following line after each change on cabal:
 
 ```
 cabal2nix . > default.nix
 ```
+
+### TODO
+
+- [ ] Inbound port 8080 is not open by default on physical.nix
+- [ ] Requires a much bigger instance due to the compilation of the derivation.
+
+### Endpoints
+
+The server should be running on port `8080`.
+
+- Create game:
+
+```bash
+$ curl -X PUT ec2-3-248-202-110.eu-west-1.compute.amazonaws.com:8080/game -H "Content-Type: application/json" -d '{ "channel": "sigr3s", "commands": [ "command_foo", "command_faa"] }'
+```
+
+- Update game status:
+
+```bash
+TODO
+```
+
+- End game:
+
+```bash
+TODO
+```
+
 
 ### How to deploy?
 

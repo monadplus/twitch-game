@@ -1,5 +1,6 @@
 { mkDerivation, aeson, base, servant, servant-server, stdenv, text
-, wai, wai-extra, warp
+, wai, wai-extra, warp, stm, parsec, containers, mtl, lens, async, uuid-types
+, random
 }:
 mkDerivation {
   pname = "twitch-game";
@@ -9,6 +10,8 @@ mkDerivation {
   isExecutable = true;
   executableHaskellDepends = [
     aeson base servant servant-server text wai wai-extra warp
+    stm parsec containers mtl lens async uuid-types
+    random
   ];
   homepage = "https://github.com/monadplus/twitch-game";
   description = "Twitch IRC game";
