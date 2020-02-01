@@ -49,16 +49,21 @@ type Api =  "game" :> ReqBody '[JSON] StartReq  :> Put   '[JSON] StartResp
 startGame :: StartReq -> App StartResp
 startGame _ = do
   uuid <- liftIO $ randomIO
+  liftIO $ putStrLn $ "Starting game with session_id: " <> show uuid
   return $ StartResp (SessionID uuid)
 
 
 -- TODO
 updateGame :: UUID -> App GameUpdate
-updateGame = undefined
+updateGame uuid = do
+  liftIO $ putStrLn ("Updating game: " <> show uuid)
+  return (GameUpdate [] [])
 
 -- TODO
 endGame :: UUID -> App NoContent
-endGame _ = return NoContent
+endGame uuid = do
+  liftIO $ putStrLn ("Deleting game: " <> show uuid)
+  return NoContent
 
 server :: ServerT Api App
 server = startGame :<|> updateGame :<|> endGame
@@ -82,7 +87,7 @@ runServer port ctx =
 main :: IO ()
 main = do
   ctx <- newServerState
-  let port = 8080
+  let port = 8081
       api  = runServer port ctx
       bot  = runBot ctx
   putStrLn ("Starting server on port " <> show port)

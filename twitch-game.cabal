@@ -17,8 +17,13 @@ tested-With: GHC == 8.6.5
 executable twitch-game
   main-is:             Main.hs
   other-modules: Types
-               , Bot
                , JSON.Internals
+               , Bot
+               , Twitch.Lib
+               , Twitch.Internal.Client
+               , Twitch.Internal.Constants
+               , Twitch.Internal.Parser
+               , Twitch.Internal.Types
   -- other-extensions:
   ghc-options: -Wall
                -O3
@@ -26,10 +31,12 @@ executable twitch-game
                -rtsopts
                -with-rtsopts=-N
   build-depends:       base ^>=4.12.0.0
+                     , bytestring
                      , aeson
                      , async
                      , containers
                      , lens ^>=4.17.1
+                     , network
                      , mtl
                      , parsec
                      , random
