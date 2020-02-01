@@ -17,40 +17,47 @@ tested-With: GHC == 8.6.5
 executable twitch-game
   main-is:             Main.hs
   other-modules:
-                 Bot
-               , Errors
+
+                 API.Endpoints
+               , API.Errors
+               , API.Lib
+               , API.Types
+
+               , Game.Lib
+
                , JSON.Internals
-               , Types
+
                , Twitch.Lib
                , Twitch.Internal.Client
                , Twitch.Internal.Constants
                , Twitch.Internal.Parser
                , Twitch.Internal.Types
 
-
-  -- other-extensions:
   ghc-options: -Wall
                -O3
                -threaded
                -rtsopts
                -with-rtsopts=-N
-  build-depends:       base ^>=4.12.0.0
-                     , bytestring
-                     , aeson
-                     , async
-                     , containers
-                     , lens ^>=4.17.1
-                     , network
-                     , mtl
-                     , parsec
-                     , random
-                     , servant
-                     , servant-server
-                     , stm
-                     , text
-                     , uuid-types
-                     , warp
-                     , wai
-                     , wai-extra
+
+  build-depends:
+                  base ^>=4.12.0.0
+                , bytestring
+                , aeson
+                , async
+                , containers
+                , lens ^>=4.17.1
+                , network
+                , mtl
+                , parsec
+                , random
+                , servant
+                , servant-server
+                , stm
+                , text
+                , uuid-types
+                , warp
+                , wai
+                , wai-extra
+
   hs-source-dirs:      src
   default-language:    Haskell2010

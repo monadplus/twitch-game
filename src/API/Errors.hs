@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Errors (
+module API.Errors (
     gameAlreadyStarted
   , sessionNotFound
   ) where
@@ -16,6 +16,15 @@ import qualified Data.Aeson as Aeson
 import GHC.Generics
 
 -----------------------------
+
+gameAlreadyStarted :: ServerError
+gameAlreadyStarted = err200With "The channel is already playing the game."
+
+sessionNotFound :: ServerError
+sessionNotFound = err200With "Session ID not found."
+
+-----------------------------
+-- Private
 
 newtype ErrorCode = ErrorCode { error_code :: Text }
   deriving (Generic)
@@ -35,8 +44,3 @@ err200With body =
    in err200 { errBody = (Aeson.encode err) }
 
 
-gameAlreadyStarted :: ServerError
-gameAlreadyStarted = err200With "The channel is already playing the game."
-
-sessionNotFound :: ServerError
-sessionNotFound = err200With "Session ID not found."

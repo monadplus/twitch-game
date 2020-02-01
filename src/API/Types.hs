@@ -8,18 +8,24 @@
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeOperators              #-}
-module Types where
+module API.Types where
 
+import           Control.Concurrent.Async
 import           Control.Concurrent.STM
 import           Control.Lens
+import           Control.Monad.Reader
 import           Data.Aeson
-import           Control.Concurrent.Async
-import           Data.Map.Strict        (Map)
-import           Data.Map.Strict        as Map
-import           Data.Text              (Text)
-import           Data.UUID.Types        (UUID)
-import           GHC.Generics           (Generic)
+import           Data.Map.Strict          (Map)
+import           Data.Map.Strict          as Map
+import           Data.Text                (Text)
+import           Data.UUID.Types          (UUID)
+import           GHC.Generics             (Generic)
 import           JSON.Internals
+import qualified Servant
+
+---------------------------------------------
+
+type App = ReaderT ServerState Servant.Handler
 
 ---------------------------------------------
 

@@ -10,23 +10,23 @@ module Twitch.Internal.Client (
 
 ----------------------------------------------
 
-import           Control.Monad        (forever)
-import           Data.Monoid          (mappend)
-import           Data.Text.IO         (hGetLine, hPutStrLn)
-import           Network              (PortID (PortNumber), connectTo)
-import           System.IO            (BufferMode (NoBuffering), Handle, hPrint, hSetBuffering, stderr, stdout)
-import           Text.Printf          (hPrintf)
+import           Control.Monad                (forever)
+import           Data.Monoid                  (mappend)
+import           Data.Text.IO                 (hGetLine, hPutStrLn)
+import           Network                      (PortID (PortNumber), connectTo)
+import           System.IO                    (BufferMode (NoBuffering), Handle, hPrint, hSetBuffering, stderr, stdout)
+import           Text.Printf                  (hPrintf)
 
-import           Twitch.Internal.Constants as Twitch
+import           Twitch.Internal.Constants    as Twitch
 import           Twitch.Internal.Parser
 import           Twitch.Internal.Types
 
-import           Data.Text            (Text)
-import qualified Data.Text            as T
+import           Data.Text                    (Text)
+import qualified Data.Text                    as T
 
-import           Types
+import           API.Types
 
-import Control.Concurrent.STM.TChan
+import           Control.Concurrent.STM.TChan
 
 ----------------------------------------------
 
