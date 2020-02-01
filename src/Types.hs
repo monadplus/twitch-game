@@ -13,6 +13,7 @@ module Types where
 import           Control.Concurrent.STM
 import           Control.Lens
 import           Data.Aeson
+import           Control.Concurrent.Async
 import           Data.Map.Strict        (Map)
 import           Data.Map.Strict        as Map
 import           Data.Text              (Text)
@@ -24,17 +25,21 @@ import           JSON.Internals
 
 newtype Channel = Channel { _unChannel :: Text }
   deriving (Show, Generic)
-  deriving newtype (FromJSON, ToJSON)
+  deriving newtype (Eq, Ord, FromJSON, ToJSON)
 
 newtype SessionID = SessionID { _unSessionID :: UUID }
-  deriving (Show, Generic)
+  deriving (Show, Eq, Ord, Generic)
   deriving newtype (FromJSON, ToJSON)
 
 newtype PlayerName = PlayerName { _unPlayerName :: Text }
-  deriving (Show, Generic)
+  deriving (Show, Eq, Ord, Generic)
   deriving newtype (FromJSON, ToJSON)
 
 newtype Command = Command { _unCommand :: Text }
+  deriving (Show, Eq, Ord, Generic)
+  deriving newtype (FromJSON, ToJSON)
+
+newtype Color = Color { _unColor :: Text } -- e.g. "#0000FF"
   deriving (Show, Generic)
   deriving newtype (FromJSON, ToJSON)
 
@@ -55,12 +60,10 @@ data StartResp = StartResp
 ---------------------------------------------
 
 data PlayerResp = PlayerResp
-  { _id :: PlayerName
+  { _id    :: PlayerName
+  , _color :: Color
   } deriving (Show, Generic)
     deriving (ToJSON, FromJSON) via (NoPrefix PlayerResp)
-
-toPlayerResp :: Player -> PlayerResp
-toPlayerResp = undefined
 
 data CommandResp = CommandResp
   { _player_id :: PlayerName
@@ -74,34 +77,55 @@ data GameUpdate = GameUpdate
   } deriving (Show, Generic)
     deriving (ToJSON, FromJSON) via (NoPrefix GameUpdate)
 
+----------------------------------------------------
+-- Dispatcher
+
+data DispatcherMsg =
+    Start Channel SessionID
+  | Stop SessionID
+  | TwitchMsg
+        String -- ^ Channel
+        String -- ^ User
+        Text {-raw commands-}
+        (Maybe (Map String String)) -- PrivateMessageTags
+  deriving Show
 
 ----------------------------------------------------
 
-data Player = Player
-  { _unLastCommand :: Maybe Command
+data PlayerStats = PlayerStats
+  { _lastCommand :: Maybe Command
+  , _playerColor :: Color
   }
+
+type NewPlayers = Map PlayerName Color
+type AllPlayers = Map PlayerName PlayerStats
+type Task = Async ()
 
 data ServerState = ServerState
-  { _activeGames :: TVar (Map Channel SessionID)
-  -- ^^^^^^^ end is an explicit message (no timeout for now)
-  , _players     :: TVar (Map PlayerName Player)
-  -- ^^^^^^^ players may have left.. (TODO we could check that)
+  { _activeGames :: TVar (Map Channel (SessionID, [Command]))
+  , _runningBots :: TVar (Map SessionID Task)
+  , _newPlayers  :: TVar NewPlayers
+  , _allPlayers  :: TVar AllPlayers
+  , _dQueue      :: TChan DispatcherMsg
   }
 
-makeFields ''Channel
-makeFields ''SessionID
-makeFields ''PlayerName
-makeFields ''Command
-makeFields ''Player
-makeFields ''StartResp
-makeFields ''StartReq
-makeFields ''PlayerResp
-makeFields ''CommandResp
-makeFields ''GameUpdate
-makeFields ''ServerState
+makeLenses ''Channel
+makeLenses ''SessionID
+makeLenses ''PlayerName
+makeLenses ''Command
+makeLenses ''PlayerStats
+makeLenses ''StartResp
+makeLenses ''StartReq
+makeLenses ''PlayerResp
+makeLenses ''CommandResp
+makeLenses ''GameUpdate
+makeLenses ''ServerState
 
 newServerState :: IO (ServerState)
 newServerState = do
-  g <- newTVarIO Map.empty
-  p <- newTVarIO Map.empty
-  return $ ServerState g p
+  games      <- newTVarIO Map.empty
+  bots       <- newTVarIO Map.empty
+  newPlayers <- newTVarIO Map.empty
+  allPlayers <- newTVarIO Map.empty
+  queue      <- newTChanIO
+  return $ ServerState games bots newPlayers allPlayers queue

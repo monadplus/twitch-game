@@ -29,7 +29,10 @@ data Action
 type Channel = String
 type User = String
 type Command = String
+type GameCommand = String -- ^ e.g. !join, !repair, ...
 type Mode = String
 type Client = Handle
 
+-- | Examples: color      : "#0000FF"
+--             subscriber : "0"|"1"
 type PrivateMessageTags = Map String String

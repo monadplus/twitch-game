@@ -38,32 +38,13 @@ import qualified Text.Parsec                          as Parsec
 import           Bot
 import           JSON.Internals
 import           Types
+import           Errors
 
 type App = ReaderT ServerState Servant.Handler
 
 type Api =  "game" :> ReqBody '[JSON] StartReq  :> Put   '[JSON] StartResp
        :<|> "game" :> Capture "session_id" UUID :> Get    '[JSON] GameUpdate
        :<|> "game" :> Capture "session_id" UUID :> Delete '[JSON] NoContent
-
--- TODO
-startGame :: StartReq -> App StartResp
-startGame _ = do
-  uuid <- liftIO $ randomIO
-  liftIO $ putStrLn $ "Starting game with session_id: " <> show uuid
-  return $ StartResp (SessionID uuid)
-
-
--- TODO
-updateGame :: UUID -> App GameUpdate
-updateGame uuid = do
-  liftIO $ putStrLn ("Updating game: " <> show uuid)
-  return (GameUpdate [] [])
-
--- TODO
-endGame :: UUID -> App NoContent
-endGame uuid = do
-  liftIO $ putStrLn ("Deleting game: " <> show uuid)
-  return NoContent
 
 server :: ServerT Api App
 server = startGame :<|> updateGame :<|> endGame
@@ -84,11 +65,126 @@ runServer port ctx =
       application = Network.Wai.Middleware.RequestLogger.logStdoutDev $
         serve (Proxy @Api) (readerServer ctx)
 
+---------------------------------------
+
+-- TODO STM and IO doesn't fit well.
+startGame :: StartReq -> App StartResp
+startGame (StartReq chan cmds) = do
+  tvar  <- view activeGames
+  games <- unSTM $ readTVar tvar
+  when (Map.member chan games) $ throwError gameAlreadyStarted
+  sessionID <- liftIO $ fmap SessionID randomIO
+  liftIO $ putStrLn $ "Starting game with " <> show sessionID
+  tchan <- view dQueue
+  unSTM $ writeTChan tchan (Start chan sessionID)
+  unSTM $ writeTVar tvar (Map.insert chan (sessionID, cmds) games)
+  return (StartResp sessionID)
+
+-- | Sends the collected commands to the server flushing the current ones.
+updateGame :: UUID -> App GameUpdate
+updateGame uuid = do
+  let sessionID = SessionID uuid
+  liftIO $ putStrLn ("Updating game: " <> show sessionID)
+  ctx <- view Prelude.id
+  games <- unSTM $ readTVar (ctx ^. activeGames)
+  let optCmds = preview ( folded
+                        . _2
+                        . filtered (elemOf _1 sessionID)
+                        ) $ Map.toList games
+  case optCmds of
+    Just (_, cmds) -> do
+      new <- unSTM $ ctx ^. newPlayers . to (flip swapTVar Map.empty)
+      all <- unSTM $ ctx ^. allPlayers . to readTVar
+      return $ toGameUpdate cmds new all
+    Nothing -> throwError sessionNotFound
+
+toGameUpdate
+  :: [Command]
+  -> NewPlayers
+  -> AllPlayers
+  -> GameUpdate
+toGameUpdate cmds new all = do
+  GameUpdate newPlayers newCmds
+    where
+      commandMap = Map.fromList (zip cmds [1..])
+
+      commandToCode c = commandMap ! c
+
+      newPlayers = fmap (\(name, color) -> PlayerResp name color) $ Map.toList new
+
+      newCmds = concat $
+        keys all <&> \name ->
+          let (PlayerStats optCmd color) = all ! name
+           in optCmd & maybe []
+                 (\cmd -> [CommandResp name (commandToCode cmd)])
+
+unSTM :: (MonadIO m) => STM a -> m a
+unSTM = liftIO . atomically
+
+-- | No-op if the session does not exist
+endGame :: UUID -> App NoContent
+endGame uuid = do
+  let sessionID = SessionID uuid
+  liftIO $ putStrLn ("Deleting game: " <> show uuid)
+  tchan <- view dQueue
+  unSTM $ writeTChan tchan (Stop sessionID)
+  return NoContent
+
+------------------------------------------
+-- Bot Dispatcher
+
+-- | Listen to the dispatcher chat
+runDispatcher :: ServerState -> IO ()
+runDispatcher ctx = forever $ do
+  let q = ctx ^. dQueue
+  msg <- atomically $ readTChan q
+  case msg of
+    Start chan sessionID ->
+      processStart chan sessionID
+    Stop sessionID ->
+      processStop sessionID
+    TwitchMsg channel user msg tags ->
+      processTwitchMsg channel user msg tags
+
+  where
+
+    processStart :: Channel -> SessionID -> IO ()
+    processStart chan sessionID = do
+      putStrLn $ "Starting bot for session: " <> show sessionID
+      task <- async $ runBot (chan ^. unChannel . to T.unpack)
+                             (ctx ^. dQueue)
+      atomically $ modifyTVar (ctx ^. runningBots)
+                              (Map.insert sessionID task)
+
+    --------
+
+    processStop :: SessionID -> IO ()
+    processStop sessionID = do
+      putStrLn $ "Stopping bot for session: " <> show sessionID
+      task <- atomically $
+               view ( runningBots
+                    . to (flip stateTVar $ \bots -> (bots ! sessionID, Map.delete sessionID bots))
+                    ) ctx
+      cancel task
+
+    --------
+
+    processTwitchMsg
+      :: String  -- ^ Channel
+      -> String  -- ^ User
+      -> Text    -- ^ Raw Command
+      -> Maybe (Map String String)
+      -> IO ()
+    processTwitchMsg channel user msg tagsOpt =
+      return ()
+
+------------------------------------------
+
 main :: IO ()
 main = do
   ctx <- newServerState
-  let port = 8081
-      api  = runServer port ctx
-      bot  = runBot ctx
+  let port = 8080
   putStrLn ("Starting server on port " <> show port)
-  concurrently_ api bot
+  concurrently_
+    (runServer port ctx)
+    (runDispatcher ctx)

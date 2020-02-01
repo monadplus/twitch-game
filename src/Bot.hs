@@ -7,6 +7,7 @@
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 module Bot
   ( runBot
@@ -37,8 +38,9 @@ import           Servant.Server
 import           System.IO
 import           Text.Parsec                          ((<?>))
 import qualified Text.Parsec                          as Parsec
-import           Types
+import           Data.Coerce
 -- My modules
+import           Types
 import qualified Twitch.Lib                           as Twitch
 
 nick :: String
@@ -47,25 +49,18 @@ nick = "otter_chaos_repair"
 pass :: String
 pass = "oauth:4o5ilipoc2piphhh04m7x653r296f8"
 
-channel :: String
-channel = "otter_chaos_repair"
-
-runBot :: ServerState -> IO ()
-runBot _ctx = do
+runBot
+  :: String -- ^ channel to join
+  -> TChan DispatcherMsg -- ^ You need to update this
+  -> IO ()
+runBot chan tchan = mask $ \restore -> do
   putStrLn $ "Twitch bot: started"
-  hSetBuffering stdout NoBuffering
   client <- Twitch.connect
   putStrLn $ "Twitch bot: connected"
   Twitch.authenticate client nick pass
   putStrLn $ "Twitch bot: authenticated"
-  Twitch.joinChannel client channel
-  putStrLn $ "Twitch bot joined channel: " <> channel
+  Twitch.joinChannel client chan
+  putStrLn $ "Twitch bot joined channel: " <> chan
   putStrLn $ "Twitch bot processing messages..."
-  concurrently_
-    (Twitch.processMessages client stdout)
-    (readCommandLine client channel)
-
-readCommandLine :: Twitch.Client -> Twitch.Channel -> IO ()
-readCommandLine client channel = forever $ do
-  content <- Text.hGetLine stdin
-  Twitch.sendMessage client channel content
+  restore (Twitch.processMessages client tchan) `catch` \(e :: SomeException) ->
+    putStrLn $ "Bot listening " <> chan <> " has stoped because " <> show e

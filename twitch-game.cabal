@@ -16,14 +16,18 @@ tested-With: GHC == 8.6.5
 
 executable twitch-game
   main-is:             Main.hs
-  other-modules: Types
+  other-modules:
+                 Bot
+               , Errors
                , JSON.Internals
-               , Bot
+               , Types
                , Twitch.Lib
                , Twitch.Internal.Client
                , Twitch.Internal.Constants
                , Twitch.Internal.Parser
                , Twitch.Internal.Types
+
+
   -- other-extensions:
   ghc-options: -Wall
                -O3

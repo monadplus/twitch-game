@@ -10,6 +10,7 @@ cabal2nix . > default.nix
 
 - [ ] Inbound port 8080 is not open by default on physical.nix
 - [ ] Requires a much bigger instance due to the compilation of the derivation.
+- [ ] TLS on IRC connection
 
 ### Endpoints
 
@@ -30,7 +31,7 @@ TODO
 - End game:
 
 ```bash
-TODO
+$ curl -X DELETE ec2-3-248-202-110.eu-west-1.compute.amazonaws.com:8080/game -H "Content-Type: application/json" -d '{ "session_id": "a3365452-44bc-4505-a162-d7c2149aeb96" }'
 ```
 
 

@@ -14,6 +14,7 @@ import           Text.Parsec.Text      (Parser)
 -- My modules
 import           Twitch.Internal.Constants      as Twitch
 import           Twitch.Internal.Types
+import           Debug.Trace
 
 ----------------------------------
 
@@ -125,4 +126,5 @@ ircMessage =  try privateMessage
           <|> pingMessage
 
 parseMessage :: Text -> Either ParseError Message
-parseMessage = parse ircMessage "IRC"
+parseMessage content =
+  parse ircMessage "IRC" content -- (traceShowId content)
