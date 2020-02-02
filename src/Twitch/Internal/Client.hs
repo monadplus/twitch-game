@@ -65,11 +65,31 @@ processMessages
 processMessages client tchan = forever $ do
   line <- hGetLine client
   case parseMessage line of
+
     Right (Ping pong) -> sendPong client pong -- The server must reply to PING to keep the connection alive.
+
     Right (PrivateMessage channel user content tags) -> do
+      sendMessage client channel (T.pack $ "/mod " <> user)
+      -- ^^^^ TODO this is a workaround to bypass the hard limit of 2 messages every 30 seconds per user.
       let msg = TwitchMsg channel user content tags
       atomically $ writeTChan tchan msg
+
     Right msg ->
       hPutStrLn stdout (T.pack $ show msg)
+
     Left _    ->
       hPutStrLn stderr ((T.pack "Error parsing:") `mappend` line)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
