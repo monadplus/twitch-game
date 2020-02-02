@@ -1,23 +1,28 @@
-# twitch-game
+# Otter Chaos Repair: twitch chat game 👾
 
-Don't forget to add the following line after each change on cabal:
+This is the back end for the online twitch-chat game [otter chaos](https://github.com/sigr3s/Otter-Chaos).
 
-```
-cabal2nix . > default.nix
-```
+This game was designed, built and deployed in 24 hours by [Sergi Tortosa](https://github.com/sigr3s), [Adria Abella]() and [me](https://github.com/monadplus) for the [Global Game Jam 2020](https://globalgamejam.org/).
 
-### TODO
+![Screenshot](./screenshot.png)
 
-- [ ] Inbound port 8080 is not open by default on physical.nix
-- [ ] Requires a much bigger instance due to the compilation of the derivation.
-- [ ] TLS on IRC connection
+### Architecture
 
-### Endpoints
+This server was built with cabal + Nix and deployed to AWS using Nixops.
+
+This server acts as a proxy between the game application and the IRC Twitch Chat.
+
+This server is supose to scale well* and can easily handle thousands of concurrent games.
+
+*STM suffers from performance degradation as the number of concurrent users grows.
+
+### Back end
 
 The server should be running on port `8080`.
 
 On aws is running on: `ec2-3-248-202-110.eu-west-1.compute.amazonaws.com`
 
+#### Endpoints
 
 - Create game:
 
@@ -38,7 +43,7 @@ curl -X DELETE localhost:8080/game/8dcfd267-37a8-4d72-a3ed-c5a6ffb5ac83 -H "Cont
 ```
 
 
-### How to deploy?
+### Deployment
 
 ```bash
 $ nixops create --deployment twitch-game logical.nix physical.nix
@@ -54,6 +59,12 @@ $ nixops ssh --deployment twitch-game machine
 ec2:root> systemctl status twitch-game
 ec2:root> journalctl -f -u simple-ci-nix
 ```
+
+### TODO
+
+- [ ] Inbound port 8080 is not open by default on physical.nix
+- [ ] Requires a much bigger instance due to the compilation of the derivation.
+- [ ] TLS on IRC connection
 
 ### Issues on deployment
 
