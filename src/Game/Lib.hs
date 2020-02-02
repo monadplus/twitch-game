@@ -52,12 +52,18 @@ runGame ctx = forever $ do
   let q = ctx ^. dQueue
   msg <- atomically $ readTChan q
   case msg of
+
     Start chan sessionID ->
       processStart chan sessionID
+
     Stop sessionID ->
       processStop sessionID
-    TwitchMsg rawChannel user msg tags ->
-      processTwitchMsg rawChannel user msg tags
+
+    KeepAlive sessionID ->
+      keepAlive sessionID
+
+    TwitchMsg rawChannel user msg' tags ->
+      processTwitchMsg rawChannel user msg' tags
 
   where
 
@@ -66,19 +72,64 @@ runGame ctx = forever $ do
       putStrLn $ "Starting bot for session: " <> show sessionID
       task <- async $ runTwitchBot (chan ^. unChannel . to T.unpack)
                                    (ctx ^. dQueue)
+      timeoutTask <- cancelIn10Seconds (ctx ^. dQueue) sessionID
       atomically $ modifyTVar (ctx ^. runningBots)
-                              (Map.insert sessionID task)
+                              (Map.insert sessionID (task, timeoutTask))
 
     --------
 
     processStop :: SessionID -> IO ()
     processStop sessionID = do
       putStrLn $ "Stopping bot for session: " <> show sessionID
-      task <- atomically $ do
-               view ( runningBots
-                    . to (flip stateTVar $ \bots -> (bots ! sessionID, Map.delete sessionID bots))
-                    ) ctx
-      cancel task
+      taskOpt <- atomically $ do
+             games <- readTVar $ ctx ^. activeGames
+             let channelOpt = ipreview (ifolded . filtered (elemOf _1 sessionID)) games
+             case channelOpt of
+               Just (channel', _) -> do
+                 -- Remove active game
+                 modifyTVar (ctx ^. activeGames) (Map.delete channel')
+                 -- Remove players from the server
+                 gamePlayers' <- readTVar $ ctx ^. gamePlayers
+                 let playersToDelete = (Map.toList gamePlayers') ^.. folded . filtered ((== channel'). snd) . _1
+                 Prelude.foldr (\playerName acc -> do
+                                   acc
+                                   let deletePlayer from' = modifyTVar (ctx ^. from') (Map.delete playerName)
+                                   deletePlayer newPlayers
+                                   deletePlayer allPlayers
+                                   deletePlayer gamePlayers
+                               ) (pure ()) playersToDelete
+               Nothing ->
+                 return ()
+             -- Stop running bot
+             view ( runningBots
+                  . to (flip stateTVar $ \bots ->
+                          (,) (bots !? sessionID)
+                              (Map.delete sessionID bots)
+                       )
+                  ) ctx
+
+      case taskOpt of
+        Just (task, timeout) -> do
+          cancel timeout
+          cancel task
+        Nothing ->
+          return ()
+
+    --------
+
+    keepAlive :: SessionID -> IO ()
+    keepAlive sessionID = do
+      putStrLn "Keep Alive"
+      let tvar = ctx ^. runningBots
+      bots <- atomically $ readTVar tvar
+      case bots ^. at sessionID of
+        Just (task, timeout) -> do
+          -- Cancel current timeout and add a new one.
+          cancel timeout
+          newTimeout <- cancelIn10Seconds (ctx ^. dQueue) sessionID
+          atomically $ writeTVar tvar (bots & at sessionID ?~ (task, newTimeout))
+        Nothing ->
+          return ()
 
     --------
 
@@ -90,17 +141,17 @@ runGame ctx = forever $ do
       -> IO ()
     processTwitchMsg rawChan user rawCommand tagsOpt = do
       games <- atomically $ ctx ^. activeGames . to readTVar
-      let validCommands =  games ^?! ix channel . _2
+      let validCommands =  games ^?! ix channel' . _2
       case parseCommand validCommands rawCommand of
 
-        Left err -> do
+        Left _ -> do
           Text.putStr $ "Couldn't parse the message: " <> rawCommand
           return () -- Usually not an error.
 
         Right Join -> do
           putStrLn "Join command parsed!"
           players <- atomically $ ctx ^. allPlayers . to readTVar
-          let color =
+          let color' =
                 maybe (Color "#000000")
                       (Color . T.pack) $ do
                         tags <- tagsOpt
@@ -110,18 +161,28 @@ runGame ctx = forever $ do
               return () -- Already exist
             Nothing -> do
               atomically $ do
-                ctx ^. newPlayers . to (flip modifyTVar (Map.insert playerName color))
-                ctx ^. allPlayers . to (flip modifyTVar (Map.insert playerName (PlayerStats Nothing color)))
+                ctx ^. newPlayers . to (flip modifyTVar (Map.insert playerName color'))
+                ctx ^. allPlayers . to (flip modifyTVar (Map.insert playerName (PlayerStats Nothing color')))
+                ctx ^. gamePlayers . to (flip modifyTVar (Map.insert playerName channel'))
 
-        Right (OtterCommand command)-> do
-          putStr $ "OtterCommand parsed: " <> show command
+        Right (OtterCommand command')-> do
+          putStr $ "OtterCommand parsed: " <> show command'
           void $ atomically $ do
             players <- readTVar (ctx ^. allPlayers)
-            writeTVar (ctx ^. allPlayers) (players & ix playerName . lastCommand .~ (Just command))
+            writeTVar (ctx ^. allPlayers) (players & ix playerName . lastCommand .~ (Just command'))
 
       where
-        channel = Channel (T.pack rawChan)
+        channel' = Channel (T.pack rawChan)
         playerName = PlayerName (T.pack user)
+
+
+cancelIn10Seconds :: TChan DispatcherMsg -> SessionID -> IO TimeoutTask
+cancelIn10Seconds tchan sessionID =
+  async $ do
+    threadDelay (10 * (10^(6::Int)))
+    putStrLn "Timeout!"
+    atomically $ writeTChan tchan (Stop sessionID)
+
 
 ----------------------------------
 

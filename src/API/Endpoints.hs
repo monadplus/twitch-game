@@ -37,6 +37,7 @@ import           Servant.Server                       as Servant
 import           System.Random                        (randomIO)
 import           Text.Parsec                          ((<?>))
 import qualified Text.Parsec                          as Parsec
+import Debug.Trace
 
 ------------------------------------------------------------
 
@@ -46,16 +47,19 @@ startGame :: StartReq -> App StartResp
 startGame (StartReq chan cmds) = do
   tvar  <- view activeGames
   games <- unSTM $ readTVar tvar
-  when (Map.member chan games) $ throwError gameAlreadyStarted
-  sessionID <- liftIO $ fmap SessionID randomIO
-  liftIO $ putStrLn $ "Starting game with " <> show sessionID
-  tchan <- view dQueue
-  -- TODO I dont like that one part of the logic is handled here
-  --      and the rest in the channel consumer
-  unSTM $ do
-    writeTVar tvar (Map.insert chan (sessionID, cmds) games)
-    writeTChan tchan (Start chan sessionID)
-  return (StartResp sessionID)
+  case games !? chan of
+    Just _ ->
+      throwError gameAlreadyStarted
+    Nothing -> do
+      sessionID <- liftIO $ fmap SessionID randomIO
+      liftIO $ putStrLn $ "Starting game with " <> show sessionID
+      tchan <- view dQueue
+      -- TODO I dont like that one part of the logic is handled here
+      --      and the rest in the channel consumer
+      unSTM $ do
+        writeTVar tvar (Map.insert chan (sessionID, cmds) games)
+        writeTChan tchan (Start chan sessionID)
+      return (StartResp sessionID)
 
 ------------------------------------------------------
 
@@ -65,6 +69,10 @@ updateGame uuid = do
   let sessionID = SessionID uuid
   liftIO $ putStrLn ("Updating game: " <> show sessionID)
   ctx <- view Prelude.id
+  -- Keep the connection alive
+  view dQueue >>=
+    unSTM . flip writeTChan (KeepAlive sessionID)
+
   games <- unSTM $ readTVar (ctx ^. activeGames)
   let optCmds = preview ( folded
                         . _2
@@ -73,13 +81,13 @@ updateGame uuid = do
   case optCmds of
 
     Just (_, cmds) -> do
-      new <- unSTM $ ctx ^. newPlayers . to (flip swapTVar Map.empty)
-      all <- unSTM $ do
+      new' <- unSTM $ ctx ^. newPlayers . to (flip swapTVar Map.empty)
+      all' <- unSTM $ do
         let tvar = ctx ^. allPlayers
-        all  <- readTVar tvar
-        writeTVar tvar $ all & traversed . lastCommand .~ Nothing
-        return all
-      return (toGameUpdate cmds new all)
+        all'  <- readTVar tvar
+        writeTVar tvar $ all' & traversed . lastCommand .~ Nothing
+        return all'
+      return (toGameUpdate cmds new' all')
 
     Nothing -> throwError sessionNotFound
 
@@ -88,39 +96,26 @@ toGameUpdate
   -> NewPlayers
   -> AllPlayers
   -> GameUpdate
-toGameUpdate cmds new all = do
-  GameUpdate newPlayers newCmds
+toGameUpdate cmds new allP = do
+  GameUpdate newPlayers' newCmds
     where
       commandMap = Map.fromList (zip cmds [0..])
 
       commandToCode c = commandMap ! c
 
-      newPlayers = fmap (\(name, color) -> PlayerResp name color) $ Map.toList new
+      newPlayers' = fmap (\(name, color') -> PlayerResp name color') $ Map.toList new
 
       newCmds = concat $
-        keys all <&> \name ->
-          let (PlayerStats optCmd color) = all ! name
-           in optCmd & maybe []
-                 (\cmd -> [CommandResp name (commandToCode cmd)])
+        keys allP <&> \name ->
+          let (PlayerStats optCmd _) = allP ! name
+           in maybe [] (\cmd -> [CommandResp name (commandToCode cmd)]) optCmd
 
 ------------------------------------------------------
 
--- | No-op if the session does not exist
 endGame :: UUID -> App NoContent
 endGame uuid = do
-  let sessionID = SessionID uuid
-  liftIO $ putStrLn ("Deleting game: " <> show uuid)
-  ctx <- view Prelude.id
   tchan <- view dQueue
-  unSTM $ do
-    writeTChan tchan (Stop sessionID)
-    games <- readTVar $ ctx ^. activeGames
-    let channelOpt = ipreview (ifolded . filtered (elemOf _1 sessionID)) games
-    case channelOpt of
-      Just (channel, _) ->
-        modifyTVar (ctx ^. activeGames) (Map.delete channel)
-      Nothing ->
-        return ()
+  unSTM $ writeTChan tchan (Stop (SessionID uuid))
   return NoContent
 
 ------------------

@@ -13,7 +13,7 @@ import           Game.Lib
 main :: IO ()
 main = do
   ctx <- newServerState
-  let port = 8081
+  let port = 8080
   putStrLn ("Starting server on port " <> show port)
   concurrently_
     (runServer port ctx)

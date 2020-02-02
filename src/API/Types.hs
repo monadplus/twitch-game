@@ -89,6 +89,7 @@ data GameUpdate = GameUpdate
 data DispatcherMsg =
     Start Channel SessionID
   | Stop SessionID
+  | KeepAlive SessionID -- ^ Prevent timeout
   | TwitchMsg
         String -- ^ Channel
         String -- ^ User
@@ -105,13 +106,17 @@ data PlayerStats = PlayerStats
 
 type NewPlayers = Map PlayerName Color
 type AllPlayers = Map PlayerName PlayerStats
+type GamePlayers = Map PlayerName Channel
+
 type Task = Async ()
+type TimeoutTask = Async ()
 
 data ServerState = ServerState
   { _activeGames :: TVar (Map Channel (SessionID, [Command]))
-  , _runningBots :: TVar (Map SessionID Task)
+  , _runningBots :: TVar (Map SessionID (Task, TimeoutTask))
   , _newPlayers  :: TVar NewPlayers
   , _allPlayers  :: TVar AllPlayers
+  , _gamePlayers :: TVar GamePlayers
   , _dQueue      :: TChan DispatcherMsg
   }
 
@@ -129,9 +134,10 @@ makeLenses ''ServerState
 
 newServerState :: IO (ServerState)
 newServerState = do
-  games      <- newTVarIO Map.empty
-  bots       <- newTVarIO Map.empty
-  newPlayers <- newTVarIO Map.empty
-  allPlayers <- newTVarIO Map.empty
-  queue      <- newTChanIO
-  return $ ServerState games bots newPlayers allPlayers queue
+  games       <- newTVarIO Map.empty
+  bots        <- newTVarIO Map.empty
+  newPlayers  <- newTVarIO Map.empty
+  allPlayers  <- newTVarIO Map.empty
+  gamePlayers <- newTVarIO Map.empty
+  queue       <- newTChanIO
+  return $ ServerState games bots newPlayers allPlayers gamePlayers queue
