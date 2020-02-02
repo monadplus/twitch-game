@@ -26,7 +26,7 @@ import           Data.Map.Strict                      as Map
 import           Data.Monoid
 import           Data.Text                            (Text)
 import qualified Data.Text                            as T
-import qualified Data.Text.IO                         as Text (hGetLine, hPutStrLn)
+import qualified Data.Text.IO                         as Text (hGetLine, hPutStrLn, putStr)
 import           GHC.Generics                         (Generic)
 import           JSON.Internals
 import           Network.Wai                          (Application)
@@ -43,6 +43,7 @@ import           Data.Coerce
 -- My modules
 import           API.Types
 import qualified Twitch.Lib                           as Twitch
+import           API.CommandParser
 
 --------------------------------------------------------------------
 
@@ -55,8 +56,8 @@ runGame ctx = forever $ do
       processStart chan sessionID
     Stop sessionID ->
       processStop sessionID
-    TwitchMsg channel user msg tags ->
-      processTwitchMsg channel user msg tags
+    TwitchMsg rawChannel user msg tags ->
+      processTwitchMsg rawChannel user msg tags
 
   where
 
@@ -73,7 +74,7 @@ runGame ctx = forever $ do
     processStop :: SessionID -> IO ()
     processStop sessionID = do
       putStrLn $ "Stopping bot for session: " <> show sessionID
-      task <- atomically $
+      task <- atomically $ do
                view ( runningBots
                     . to (flip stateTVar $ \bots -> (bots ! sessionID, Map.delete sessionID bots))
                     ) ctx
@@ -87,9 +88,42 @@ runGame ctx = forever $ do
       -> Text    -- ^ Raw Command
       -> Maybe (Map String String)
       -> IO ()
-    processTwitchMsg channel user msg tagsOpt =
-      return ()
+    processTwitchMsg rawChan user rawCommand tagsOpt = do
+      games <- atomically $ ctx ^. activeGames . to readTVar
+      let validCommands =  games ^?! ix channel . _2
+      case parseCommand validCommands rawCommand of
 
+        Left err -> do
+          Text.putStr $ "Couldn't parse the message: " <> rawCommand
+          return () -- Usually not an error.
+
+        Right Join -> do
+          putStrLn "Join command parsed!"
+          players <- atomically $ ctx ^. allPlayers . to readTVar
+          let color =
+                maybe (Color "#000000")
+                      (Color . T.pack) $ do
+                        tags <- tagsOpt
+                        tags !? "color"
+          case players !? playerName of
+            Just _ ->
+              return () -- Already exist
+            Nothing -> do
+              atomically $ do
+                ctx ^. newPlayers . to (flip modifyTVar (Map.insert playerName color))
+                ctx ^. allPlayers . to (flip modifyTVar (Map.insert playerName (PlayerStats Nothing color)))
+
+        Right (OtterCommand command)-> do
+          putStr $ "OtterCommand parsed: " <> show command
+          void $ atomically $ do
+            players <- readTVar (ctx ^. allPlayers)
+            writeTVar (ctx ^. allPlayers) (players & ix playerName . lastCommand .~ (Just command))
+
+      where
+        channel = Channel (T.pack rawChan)
+        playerName = PlayerName (T.pack user)
+
+----------------------------------
 
 nick :: String
 nick = "otter_chaos_repair"
@@ -110,5 +144,5 @@ runTwitchBot chan tchan = mask $ \restore -> do
   Twitch.joinChannel client chan
   putStrLn $ "Twitch bot joined channel: " <> chan
   putStrLn $ "Twitch bot processing messages..."
-  restore (Twitch.processMessages client tchan) `catch` \(e :: SomeException) ->
-    putStrLn $ "Bot listening " <> chan <> " has stoped because " <> show e
+  restore (Twitch.processMessages client tchan) `catch` \(_ :: AsyncCancelled) ->
+    putStrLn $ "Bot has stopped gracefully."

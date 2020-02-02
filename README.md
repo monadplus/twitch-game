@@ -16,22 +16,25 @@ cabal2nix . > default.nix
 
 The server should be running on port `8080`.
 
+On aws is running on: `ec2-3-248-202-110.eu-west-1.compute.amazonaws.com`
+
+
 - Create game:
 
 ```bash
-$ curl -X PUT ec2-3-248-202-110.eu-west-1.compute.amazonaws.com:8080/game -H "Content-Type: application/json" -d '{ "channel": "sigr3s", "commands": [ "command_foo", "command_faa"] }'
+$ curl -XPUT localhost:8080/game -H "Content-Type: application/json" -d '{ "channel": "otter_chaos_repair", "commands": [ "paint", "tape", "fish", "shell"] }'
 ```
 
 - Update game status:
 
 ```bash
-TODO
+curl -X GET localhost:8080/game/c6bdecbe-2777-4218-b903-2161523ce5e2 -H "Content-Type: application/json"
 ```
 
 - End game:
 
 ```bash
-$ curl -X DELETE ec2-3-248-202-110.eu-west-1.compute.amazonaws.com:8080/game -H "Content-Type: application/json" -d '{ "session_id": "a3365452-44bc-4505-a162-d7c2149aeb96" }'
+curl -X DELETE localhost:8080/game/8dcfd267-37a8-4d72-a3ed-c5a6ffb5ac83 -H "Content-Type: application/json"
 ```
 
 

@@ -18,7 +18,8 @@ executable twitch-game
   main-is:             Main.hs
   other-modules:
 
-                 API.Endpoints
+                 API.CommandParser
+               , API.Endpoints
                , API.Errors
                , API.Lib
                , API.Types

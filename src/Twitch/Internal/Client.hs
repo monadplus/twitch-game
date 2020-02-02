@@ -10,6 +10,7 @@ module Twitch.Internal.Client (
 
 ----------------------------------------------
 
+import           Control.Concurrent.STM
 import           Control.Monad                (forever)
 import           Data.Monoid                  (mappend)
 import           Data.Text.IO                 (hGetLine, hPutStrLn)
@@ -65,22 +66,10 @@ processMessages client tchan = forever $ do
   line <- hGetLine client
   case parseMessage line of
     Right (Ping pong) -> sendPong client pong -- The server must reply to PING to keep the connection alive.
-    Right msg@(PrivateMessage channel user content tags) ->
-      forward channel user content tags
-    Right msg -> hPutStrLn stdout (T.pack $ show msg)
-    Left _    -> hPutStrLn stderr ((T.pack "Error parsing:") `mappend` line)
-
-    where
-      forward channel user content tags =
-        undefined
-
-
-
-
-
-
-
-
-
-
-
+    Right (PrivateMessage channel user content tags) -> do
+      let msg = TwitchMsg channel user content tags
+      atomically $ writeTChan tchan msg
+    Right msg ->
+      hPutStrLn stdout (T.pack $ show msg)
+    Left _    ->
+      hPutStrLn stderr ((T.pack "Error parsing:") `mappend` line)

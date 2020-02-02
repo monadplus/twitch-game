@@ -12,6 +12,8 @@ module API.Endpoints where
 
 ------------------------------------------------------------
 
+import           API.Errors
+import           API.Types
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
 import           Control.Exception
@@ -36,13 +38,10 @@ import           System.Random                        (randomIO)
 import           Text.Parsec                          ((<?>))
 import qualified Text.Parsec                          as Parsec
 
--- My Modules
-import           API.Errors
-import           API.Types
-
 ------------------------------------------------------------
 
 -- TODO STM and IO doesn't fit well.
+--      Change to MVars
 startGame :: StartReq -> App StartResp
 startGame (StartReq chan cmds) = do
   tvar  <- view activeGames
@@ -51,8 +50,11 @@ startGame (StartReq chan cmds) = do
   sessionID <- liftIO $ fmap SessionID randomIO
   liftIO $ putStrLn $ "Starting game with " <> show sessionID
   tchan <- view dQueue
-  unSTM $ writeTChan tchan (Start chan sessionID)
-  unSTM $ writeTVar tvar (Map.insert chan (sessionID, cmds) games)
+  -- TODO I dont like that one part of the logic is handled here
+  --      and the rest in the channel consumer
+  unSTM $ do
+    writeTVar tvar (Map.insert chan (sessionID, cmds) games)
+    writeTChan tchan (Start chan sessionID)
   return (StartResp sessionID)
 
 ------------------------------------------------------
@@ -69,10 +71,16 @@ updateGame uuid = do
                         . filtered (elemOf _1 sessionID)
                         ) $ Map.toList games
   case optCmds of
+
     Just (_, cmds) -> do
       new <- unSTM $ ctx ^. newPlayers . to (flip swapTVar Map.empty)
-      all <- unSTM $ ctx ^. allPlayers . to readTVar
-      return $ toGameUpdate cmds new all
+      all <- unSTM $ do
+        let tvar = ctx ^. allPlayers
+        all  <- readTVar tvar
+        writeTVar tvar $ all & traversed . lastCommand .~ Nothing
+        return all
+      return (toGameUpdate cmds new all)
+
     Nothing -> throwError sessionNotFound
 
 toGameUpdate
@@ -83,7 +91,7 @@ toGameUpdate
 toGameUpdate cmds new all = do
   GameUpdate newPlayers newCmds
     where
-      commandMap = Map.fromList (zip cmds [1..])
+      commandMap = Map.fromList (zip cmds [0..])
 
       commandToCode c = commandMap ! c
 
@@ -102,8 +110,17 @@ endGame :: UUID -> App NoContent
 endGame uuid = do
   let sessionID = SessionID uuid
   liftIO $ putStrLn ("Deleting game: " <> show uuid)
+  ctx <- view Prelude.id
   tchan <- view dQueue
-  unSTM $ writeTChan tchan (Stop sessionID)
+  unSTM $ do
+    writeTChan tchan (Stop sessionID)
+    games <- readTVar $ ctx ^. activeGames
+    let channelOpt = ipreview (ifolded . filtered (elemOf _1 sessionID)) games
+    case channelOpt of
+      Just (channel, _) ->
+        modifyTVar (ctx ^. activeGames) (Map.delete channel)
+      Nothing ->
+        return ()
   return NoContent
 
 ------------------

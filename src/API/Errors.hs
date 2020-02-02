@@ -1,6 +1,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE OverloadedStrings #-}
 module API.Errors (
     gameAlreadyStarted
@@ -10,7 +11,6 @@ module API.Errors (
 -----------------------------
 
 import Data.Text (Text)
-import Data.String
 import Servant.Server
 import qualified Data.Aeson as Aeson
 import GHC.Generics
@@ -26,9 +26,9 @@ sessionNotFound = err200With "Session ID not found."
 -----------------------------
 -- Private
 
-newtype ErrorCode = ErrorCode { error_code :: Text }
-  deriving (Generic)
-  deriving (Aeson.ToJSON)
+data ErrorCode = ErrorCode { error_code :: Text }
+  deriving stock (Generic)
+  deriving anyclass (Aeson.ToJSON)
 
 -- | Unity...
 err200 :: ServerError
@@ -39,8 +39,6 @@ err200 = ServerError { errHTTPCode = 200
                      }
 
 err200With :: Text -> ServerError
-err200With body =
-  let err = ErrorCode body
-   in err200 { errBody = (Aeson.encode err) }
+err200With body = err200 { errBody = (Aeson.encode (ErrorCode body)) }
 
 
