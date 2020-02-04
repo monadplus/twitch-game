@@ -127,4 +127,4 @@ ircMessage =  try privateMessage
 
 parseMessage :: Text -> Either ParseError Message
 parseMessage content =
-  parse ircMessage "IRC" (traceShowId content)-- content --
+  parse ircMessage "IRC" content

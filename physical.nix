@@ -1,26 +1,37 @@
 let
-
-  region = "eu-west-1"; # ireland
-  accessKeyId = "default"; # symbolic name looked up in ~/.ec2-keys or a ~/.aws/credentials profile name
-
-  ec2 =
-    { resources, ... }:
-    { deployment.targetEnv = "ec2";
-      deployment.ec2.accessKeyId = accessKeyId;
-      deployment.ec2.region = region;
-      deployment.ec2.instanceType = "t2.small";
-      deployment.ec2.keyPair = resources.ec2KeyPairs.my-key-pair;
-      # workaround this space
-      deployment.ec2.ebsInitialRootDiskSize = 20;
-    };
-
+  region = "eu-west-1";
+  accessKeyId = "default";
 in
-{ machine = ec2;
+  {
+    machine =
+      { resources, ... }:
+      {
+        deployment.targetEnv = "ec2";
+        deployment.ec2 = {
+          inherit region;
+          inherit accessKeyId;
+          instanceType = "t2.small";
+          keyPair = resources.ec2KeyPairs.my-key-pair;
+          securityGroups = [ resources.ec2SecurityGroups.ssh-security-group ];
+          ebsInitialRootDiskSize = 20; # workaround this space
+        };
+      };
 
-  # Provision an EC2 key pair.
   resources.ec2KeyPairs.my-key-pair =
     { inherit region accessKeyId; };
 
-  #resources.ec2SecurityGroups.name = "launch-wizard-1";
-
+  resources.ec2SecurityGroups.ssh-security-group = {
+      inherit region;
+      inherit accessKeyId;
+      description = "Security group for SSH";
+      rules = [ {
+        fromPort = 22;
+        toPort = 22;
+        sourceIp = "0.0.0.0/0";
+      } {
+        fromPort = 8080;
+        toPort = 8080; # Doesn't work -1;
+        sourceIp = "0.0.0.0/0";
+      }];
+  };
 }

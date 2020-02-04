@@ -79,17 +79,3 @@ processMessages client tchan = forever $ do
 
     Left _    ->
       hPutStrLn stderr ((T.pack "Error parsing:") `mappend` line)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
