@@ -45,6 +45,11 @@ $ nixops create --deployment twitch-game logical.nix physical.nix
 $ nixops deploy --deployment twitch-game
 ```
 
+> This is probably not gonna work on a Windows/macOS because nixOps tries to compile
+> the derivation locally if the architecture matches but delegates the compilation
+> to the server if it doesn't match. The instance is small and resources like memory
+> and disk are scarce so when nix tries to compile it, it end up with an OutOfMemory error.
+
 This will create a new ec2 machine with this service running as a systemd unit.
 
 You can query the status of your ec2 instance:
@@ -60,7 +65,7 @@ $ nixops ssh --deployment twitch-game machine
 
 # Check the status of the service
 ec2:root> systemctl status twitch-game
-ec2:root> journalctl -f -u simple-ci-nix
+ec2:root> journalctl -f -u twitch-game
 ```
 
 Stop the ec2 instance and remove it (answer 'y' to the questions):
@@ -71,25 +76,9 @@ nixops destroy -d twitch-game && nixops delete -d twitch-game
 
 ### TODO
 
-- [ ] Requires a much bigger instance due to the compilation of the derivation
 - [ ] Unhardcode the port
 - [ ] Replace STM for MVar (performance and bugs)
 - [ ] TLS on IRC connection
-
-### Issues on deployment
-
-```
-Only for NixOS users:
-To set this option: https://nixos.org/nixos/options.html#distributed
-- nix.distributedBuilds to True
-- nix.buildMachines  set all fields
-
-If you are not using nixos:
-- Not well explained lol
-
-I solved this adding a bigger disk: deployment.ec2.ebsInitialRootDiskSize = 20;
-and also deploy to t2.small which about memory overflow on ghc linking.
-```
 
 ### Notes
 

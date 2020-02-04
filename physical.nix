@@ -10,10 +10,9 @@ in
         deployment.ec2 = {
           inherit region;
           inherit accessKeyId;
-          instanceType = "t2.small";
+          instanceType = "t2.nano";
           keyPair = resources.ec2KeyPairs.my-key-pair;
           securityGroups = [ resources.ec2SecurityGroups.ssh-security-group ];
-          ebsInitialRootDiskSize = 20; # workaround this space
         };
       };
 
