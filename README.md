@@ -1,4 +1,5 @@
 # Otter Chaos Repair: twitch chat game 👾
+[![built with nix](https://builtwithnix.org/badge.svg)](https://builtwithnix.org)
 
 This is the back end for the online twitch-chat game [otter chaos](https://github.com/sigr3s/Otter-Chaos).
 
