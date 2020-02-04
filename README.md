@@ -11,40 +11,23 @@ Demo:
 
 [![Youtube demo](http://img.youtube.com/vi/oyHgUOYpKmQ/0.jpg)](http://www.youtube.com/watch?v=oyHgUOYpKmQ)
 
-### Architecture
+### Build
 
-This server was built with cabal + Nix and deployed to AWS using Nixops.
+This project is build using `nix` + `cabal-install`.
 
-This server acts as a proxy between the game application and the IRC Twitch Chat.
-
-This server is supose to scale well* and can easily handle thousands of concurrent games.
-
-*STM suffers from performance degradation as the number of concurrent users grows.
-
-### Back end
-
-The server should be running on port `8080`.
-
-On aws is running on: `ec2-3-248-202-110.eu-west-1.compute.amazonaws.com`
-
-#### Endpoints
-
-- Create game:
+After installing both `nix` and `cabal-install`, you can compile the project:
 
 ```bash
-$ curl -XPUT localhost:8080/game -H "Content-Type: application/json" -d '{ "channel": "otter_chaos_repair", "commands": [ "paint", "tape", "fish", "shell"] }'
+$ nix-build
 ```
 
-- Update game status:
+The hack the project you can use `nix-shell`:
 
 ```bash
-curl -X GET localhost:8080/game/c6bdecbe-2777-4218-b903-2161523ce5e2 -H "Content-Type: application/json"
-```
-
-- End game:
-
-```bash
-curl -X DELETE localhost:8080/game/8dcfd267-37a8-4d72-a3ed-c5a6ffb5ac83 -H "Content-Type: application/json"
+$ nix-shell
+shell> cabal v1-configure
+shell> cabal v1-build
+shell> cabal v1-run
 ```
 
 
@@ -88,7 +71,9 @@ nixops destroy -d twitch-game && nixops delete -d twitch-game
 
 ### TODO
 
-- [ ] Requires a much bigger instance due to the compilation of the derivation.
+- [ ] Requires a much bigger instance due to the compilation of the derivation
+- [ ] Unhardcode the port
+- [ ] Replace STM for MVar (performance and bugs)
 - [ ] TLS on IRC connection
 
 ### Issues on deployment
@@ -105,3 +90,9 @@ If you are not using nixos:
 I solved this adding a bigger disk: deployment.ec2.ebsInitialRootDiskSize = 20;
 and also deploy to t2.small which about memory overflow on ghc linking.
 ```
+
+### Notes
+
+*STM suffers from performance degradation as the number of concurrent users grows.
+
+** There is possible some race conditions that I need to fix.

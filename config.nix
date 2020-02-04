@@ -4,7 +4,7 @@
       overrides = haskellPackagesNew: haskellPackagesOld: rec {
         twitch-game =
           pkgs.haskell.lib.justStaticExecutables (
-            haskellPackagesNew.callPackage ./default.nix { }
+            haskellPackagesNew.callPackage ./twitch-game.nix { }
           );
 
         network_2_6_3_1 =
